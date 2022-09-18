@@ -1,0 +1,137 @@
+---
+title: "Portfolio Management Project"
+author: "Euclid Zhang"
+date: "9/17/2019"
+output: html_document
+---
+
+
+This RMD is used to perform analysis for the Portfolio Management Project.
+
+
+```{r message = FALSE}
+#loading libraries
+
+library('yfR')
+library('stringr')
+library('dplyr')
+library('tidyr')
+```
+
+
+Load a list of US equities. The data is scraped from tradingview (https://www.tradingview.com/markets/stocks-usa/sectorandindustry-sector/) using javascript and stored in a csv file.
+
+```{r}
+stocks <- read.csv("Stocks.csv", stringsAsFactors = FALSE, na = c(""))
+```
+
+Download the daily trading prices from Yahoo, using the yfR package
+
+```{r}
+
+#Yahoo has a limit of a number of requests within a timeframe, break down the process into a few pieces and combine the data if necessary
+
+# stock_prices0 <- yf_get(
+#   tickers = stocks$Ticker,
+#   first_date = as.Date('2021-09-17'),
+#   last_date = as.Date('2022-09-16'),
+#   thresh_bad_data  = 1,
+#   freq_data = "daily"
+# )
+# save(stock_prices0, file = "stock_prices0.RData")
+
+#Load the saved data previously downloaded
+load("stock_prices0.RData")
+```
+
+reshaping the data
+
+```{r}
+#using the close price only for our analysis
+stock_prices2 <- stock_prices0[c('ticker','ref_date','price_close')]
+#convert the data from long to wide
+stock_prices2 <- spread(stock_prices2, key = ref_date, value = price_close, fill = NA)
+#merge the information
+stock_prices <- merge(stocks[c('Ticker','Type','Sector','MKT.CAP','PE','Employees')], 
+      stock_prices2, 
+      by.x = "Ticker", 
+      by.y = "ticker", 
+      all.x = FALSE, 
+      all.y = TRUE)
+
+# write.csv(stock_prices, "stock_prices.csv", row.names = FALSE)
+```
+
+Calculate the log daily returns, the expected log daily returns and volatilities.
+
+
+```{r}
+#calculate the log daily return
+log_return <- log(stock_prices[,c(8:ncol(stock_prices))] / stock_prices[,c(7:(ncol(stock_prices)-1))])
+stock_summary <- stock_prices[c('Ticker','Type','Sector','MKT.CAP','PE','Employees')]
+#calculate the mean and volatility/standard deviation of the log daily return
+stock_summary$Mean_Log_Return <- apply(log_return, 1, mean)
+stock_summary$Volatility <- apply(log_return, 1, sd)
+# write.csv(stock_summary, "stock_summary.csv", row.names = FALSE)
+stock_summary
+```
+
+
+Calculate the log daily return using the current (9/17/2022) yield rate of the U.S. 3 Month Treasury Bill, 3.144% (https://www.marketwatch.com/investing/bond/tmubmusd03m?countrycode=bx). We use 251 trade days instead of 365 calendar days in the calculation since the rate is used to compare with the returns of the equities. The rate is used as the risk-free rate for the sharpe ratio calculation.
+
+```{r}
+risk_free_rate <- log(1.03144)/251
+risk_free_rate
+```
+
+Calculate the sharpe ratios
+
+```{r}
+stock_summary$Sharpe_Ratio <- (stock_summary$Mean_Log_Return - risk_free_rate)/stock_summary$Volatility
+```
+
+Find the stock with the highest sharpe ratio and PE no greater than 25 in each sector
+
+```{r message=FALSE, warning=FALSE}
+stock_selection <- stock_summary %>% 
+  filter(Type=="Common Stock") %>% 
+  filter(PE <= 25 | is.na(PE)) %>% 
+  arrange(Sector,desc(Sharpe_Ratio)) %>% 
+  group_by(Sector) %>% 
+  top_n(n = 1)
+stock_selection
+write.csv(stock_selection, "stock_selection.csv", row.names = FALSE)
+```
+
+Find 10 ETFs with the highest sharpe ratios
+
+```{r message=FALSE, warning=FALSE}
+ETF_selection <- stock_summary %>% 
+  filter(Type=="ETF") %>% 
+  arrange(Sector,desc(Sharpe_Ratio)) %>% 
+  group_by(Sector) %>% 
+  top_n(n = 10)
+ETF_selection
+write.csv(ETF_selection, "ETF_selection.csv", row.names = FALSE)
+```
+
+
+
+Calculate the current price of the U.S.30 Year Treasury Bond. The function will be used later to calculate the bond prices for portfolio performance evaluation.
+
+```{r}
+bond_price <- function(face_value, coupon_rate, yield_rate, maturity) {
+  return ((face_value*coupon_rate/2)*(1-(1+(yield_rate/2))^-(2*maturity))/(yield_rate/2) +
+    face_value*(1+(yield_rate/2))^-(2*maturity))
+}
+```
+
+The bond price for the Treasury with face value 100, coupon rate 3%, yield rate 3.519%, and maturity 30 years is
+
+```{r}
+bond_price(100,0.03,0.03519,30)
+```
+
+
+
+
