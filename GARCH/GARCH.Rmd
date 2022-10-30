@@ -1,0 +1,131 @@
+---
+title: "GARCH Analysis"
+author: "Euclid Zhang"
+date: "10/28/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+GARCH Analysis
+CUNY SPS MSDS
+Professor Samuel Gralnick
+Team Sugar Cane: Euclid Zhang, Jie Zou, Zhenni Xie
+Fall 2022
+
+
+
+In this analysis, we will build a GARCH for one of the assets in our investment portfolio. We then use the model to predict the return and volatility for the next 10 days.
+
+
+```{r message = FALSE}
+#loading libraries
+
+library('yfR')
+library('stringr')
+library('dplyr')
+library('tidyr')
+```
+
+
+Our investment portfolio includes the following assets. In this analysis, we will focus on the equity assets.
+
+
+```{r}
+#load the asset information of our portfolio
+stocks <- read.csv("portfolio assets.csv", stringsAsFactors = FALSE, na = c(""))
+stocks
+```
+
+Download the daily trading prices from Yahoo, using the yfR package
+
+```{r message=FALSE}
+#download the asset prices
+stock_prices <- yf_get(
+  tickers = stocks$Ticker[-1],
+  first_date = as.Date('2021-10-29'),
+  last_date = as.Date('2022-10-29'),
+  thresh_bad_data  = 1,
+  freq_data = "daily"
+)
+stock_prices
+```
+
+
+We will use the adjusted price in this analysis. The data is reshaped so that the price of each asset is in one column 
+
+```{r}
+#using the adjusted close price only for our analysis
+stock_prices2 <- stock_prices[c('ticker','ref_date','price_adjusted')]
+#convert the data from long to wide
+stock_prices2 <- spread(stock_prices2, key = ticker, value = price_adjusted, fill = NA)
+#remove date for easier data frame manipulations
+stock_prices2$ref_date = NULL
+stock_prices2
+```
+
+We then calculate the daily log return of the assets
+
+```{r}
+#calculate the log return
+log_return <- log(stock_prices2[-1,]/stock_prices2[1:(nrow(stock_prices2)-1),])
+```
+
+
+We will demonstrate the GARCH process using one of our assets, 'HSON', as an example.
+
+```{r}
+#create the time series 
+return_ts = ts(log_return['HSON'])
+```
+
+The rugarch package is a powerful tool for building GARCH models with supportive output summaries.
+
+```{r}
+#load the rugarch package
+library('rugarch')
+```
+
+First, let's build a model with ar = 5, ma = 5, alpha = 5, beta = 5
+
+```{r warning=FALSE}
+#Fit a GARCH model with ar = 5, ma = 5, alpha = 5, beta = 5
+mod_specify = ugarchspec(mean.model = list(armaOrder=c(5,5)), variance.model = list(model='sGARCH', garchOrder = c(5,5)), distribution.model = 'norm')
+mod_fitting = ugarchfit(data = return_ts, spec = mod_specify, out.sample = 20, solver = 'hybrid')
+mod_fitting
+```
+
+The P-values of the Optimal Parameters indicate that some of the parameters are statistically insignificant. We will use Backward Elimination to reduce the model complexity by removing the last term of each parameter with P-value greater than 0.05.
+
+
+The Parameters of our final model are ar = 4, ma = 1, alpha = 1, beta = 3.
+
+```{r}
+#Fit the final GARCH model ar, ma, alpha, and beta determined by backward elimination
+mod_specify = ugarchspec(mean.model = list(armaOrder=c(4,1)), variance.model = list(model='sGARCH', garchOrder = c(1,3)), distribution.model = 'norm')
+mod_fitting = ugarchfit(data = return_ts, spec = mod_specify, out.sample = 20, solver = 'hybrid')
+mod_fitting
+```
+
+The Weighted Ljung-Box Tests and the Adjusted Pearson Goodness-of-Fit Test all fail to reject that the residuals are dependent, which implies that our model is valid. The P-values of the last alpha and beta terms are less than 0.01, which indicates that our time series exhibits heteroskedasticity.
+
+The following plot shows the returns and the modeled volatility. We confirm that there is heteroskedasticity in the time series.
+
+```{r}
+#Select option 1 to plot the return vs modeled standard deviation
+plot(mod_fitting)
+```
+
+Since the volatility is not constant, our previous risk assessment of calculating the VaR using constant volatility may not be reliable. Calculating the potential loss using the estimated volatility from a GARCH model would a more appropriate method.
+
+
+Finally, let's predict the returns and standard deviation for the next 10 days.
+
+```{r}
+#prediction for the next 10 periods
+prediction <- ugarchforecast(mod_fitting, n.ahead = 10)
+prediction
+```
+
+
