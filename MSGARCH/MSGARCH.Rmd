@@ -1,0 +1,184 @@
+---
+title: "MSGARCH Analysis"
+author: "Euclid Zhang"
+date: "11/01/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+MSGARCH Analysis
+CUNY SPS MSDS
+Professor Samuel Gralnick
+Team Sugar Cane: Euclid Zhang, Jie Zou, Zhenni Xie
+Fall 2022
+
+
+
+Previously, we demonstrated how to construct a GARCH model to analyze the volatility of an asset with heteroscedastic returns. In this analysis, we will examine if the Markov-Switching GARCH model performs better than the plain vanilla GARCH model in modeling the changing volatility of an investment asset. 
+
+We use the MSGARCH package in R to construct our model. The package provides two methods of constructing an MSGARCH model, the Maximum Likelihood method and the MCMC/ Bayesian method. We will focus on the MCMC/ Bayesian method in this analysis.
+
+
+```{r message = FALSE}
+#loading libraries
+
+library('yfR')
+library('stringr')
+library('dplyr')
+library('tidyr')
+```
+
+
+Our investment portfolio includes the following assets. In this analysis, we will focus on the equity assets.
+
+
+```{r}
+#load the asset information of our portfolio
+stocks <- read.csv("portfolio assets.csv", stringsAsFactors = FALSE, na = c(""))
+stocks
+```
+
+Download the daily trading prices from Yahoo, using the yfR package
+
+```{r message=FALSE}
+#download the asset prices
+stock_prices <- yf_get(
+  tickers = stocks$Ticker[-1],
+  first_date = as.Date('2021-10-29'),
+  last_date = as.Date('2022-10-29'),
+  thresh_bad_data  = 1,
+  freq_data = "daily"
+)
+stock_prices
+```
+
+
+We will use the adjusted price in this analysis. The data is reshaped so that the price of each asset is in one column 
+
+```{r}
+#using the adjusted close price only for our analysis
+stock_prices2 <- stock_prices[c('ticker','ref_date','price_adjusted')]
+#convert the data from long to wide
+stock_prices2 <- spread(stock_prices2, key = ticker, value = price_adjusted, fill = NA)
+#remove date for easier data frame manipulations
+stock_prices2$ref_date = NULL
+stock_prices2
+```
+
+We then calculate the daily log return of the assets
+
+```{r}
+#calculate the log return
+log_return <- log(stock_prices2[-1,]/stock_prices2[1:(nrow(stock_prices2)-1),])
+```
+
+
+We will demonstrate the MSGARCH process using one of our assets, 'HSON', as an example. 
+
+```{r}
+#create the time series 
+return_ts = ts(log_return['HSON'])
+```
+
+```{r}
+library("MSGARCH")
+
+set.seed(618)
+
+#seed = 32
+#13 25 26-4
+#set.seed(seed)
+```
+
+The following is the summary of the MSGARCH model with the number of states K=2. 
+
+```{r}
+
+msgarch.k2 <- CreateSpec(variance.spec = list(model = "sGARCH"),
+                          distribution.spec = list(distribution = "norm"),
+                          switch.spec = list(K = 2))
+fit.mcmc.k2 <- FitMCMC(spec = msgarch.k2, data = return_ts)
+summary(fit.mcmc.k2)
+```
+
+The following are the predicted volatility for the next 10 days.
+
+```{r}
+pred <- predict(fit.mcmc.k2, nahead = 10, do.return.draw = TRUE)
+pred$vol
+```
+
+The MSGARCH package also has built-in functions to calculate the VaR and Expected Shortfall of the predictions. These are useful tools for our investment risk management.
+
+```{r}
+risk <- Risk(fit.mcmc.k2, alpha = c(0.01, 0.05), nahead = 10)
+risk$VaR
+risk$ES
+```
+
+
+We can compare the estimated volatilities of the MSGARCH (K=2) and the simple GARCH, which is a MSGARCH model with a number of states K=1. 
+
+
+
+```{r}
+set.seed(seed)
+
+msgarch.k2 <- CreateSpec(variance.spec = list(model = "sGARCH"),
+                          distribution.spec = list(distribution = "norm"),
+                          switch.spec = list(K = 2))
+fit.mcmc.k2 <- FitMCMC(spec = msgarch.k2, data = return_ts)
+
+```
+
+
+
+```{r}
+plot(return_ts, type = 'l', las = 1, lwd = 1, xlab = "Date",
+     ylab = "Return", col = "black", cex.axis = 1.5, cex.lab = 1.5, pch = 19)
+lines(1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+lines(-1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+lines(1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+lines(-1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+legend(x="topleft", legend=c("K=1", "K=2"),
+       col=c("red", "blue"), lty=1, cex=0.8)
+```
+
+
+```{r}
+# plot(return_ts, type = 'l', las = 1, lwd = 1, xlab = "Date",
+#      ylab = "Return", col = "black", cex.axis = 1.5, cex.lab = 1.5, pch = 19)
+# lines(1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+# lines(-1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+# lines(1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+# lines(-1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+# lines(1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
+# lines(-1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
+# lines(1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
+# lines(-1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
+# legend(x="topleft", legend=c("K=1", "K=2","K=3","K=5"),
+#        col=c("red", "blue", "orange","purple"), lty=1, cex=0.8)
+```
+
+
+
+```{r}
+# plot(return_ts, type = 'l', las = 1, lwd = 1, xlab = "Date", ylim = c(-2.2,2.2),
+#      ylab = "Return", col = "black", cex.axis = 1.5, cex.lab = 1.5, pch = 19)
+# lines(1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+# lines(-1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
+# lines(1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+# lines(-1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
+# lines(1.96*Volatility(fit.mcmc.k3), type = 'l', col = "green")
+# lines(-1.96*Volatility(fit.mcmc.k3), type = 'l', col = "green")
+# lines(1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
+# lines(-1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
+# lines(1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
+# lines(-1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
+# legend(x="topleft", legend=c("K=1", "K=2","K=3","K=4","K=5"),
+#        col=c("red", "blue", "green", "orange","purple"), lty=1, cex=0.8)
+```
+
+
