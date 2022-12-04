@@ -87,9 +87,6 @@ library("MSGARCH")
 
 set.seed(618)
 
-#seed = 32
-#13 25 26-4
-#set.seed(seed)
 ```
 
 The following is the summary of the MSGARCH model with the number of states K=2. 
@@ -124,12 +121,12 @@ We can compare the estimated volatilities of the MSGARCH (K=2) and the simple GA
 
 
 ```{r}
-set.seed(seed)
+set.seed(618)
 
-msgarch.k2 <- CreateSpec(variance.spec = list(model = "sGARCH"),
+msgarch.k1 <- CreateSpec(variance.spec = list(model = "sGARCH"),
                           distribution.spec = list(distribution = "norm"),
-                          switch.spec = list(K = 2))
-fit.mcmc.k2 <- FitMCMC(spec = msgarch.k2, data = return_ts)
+                          switch.spec = list(K = 1))
+fit.mcmc.k1 <- FitMCMC(spec = msgarch.k1, data = return_ts)
 
 ```
 
@@ -147,38 +144,5 @@ legend(x="topleft", legend=c("K=1", "K=2"),
 ```
 
 
-```{r}
-# plot(return_ts, type = 'l', las = 1, lwd = 1, xlab = "Date",
-#      ylab = "Return", col = "black", cex.axis = 1.5, cex.lab = 1.5, pch = 19)
-# lines(1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
-# lines(-1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
-# lines(1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
-# lines(-1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
-# lines(1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
-# lines(-1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
-# lines(1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
-# lines(-1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
-# legend(x="topleft", legend=c("K=1", "K=2","K=3","K=5"),
-#        col=c("red", "blue", "orange","purple"), lty=1, cex=0.8)
-```
-
-
-
-```{r}
-# plot(return_ts, type = 'l', las = 1, lwd = 1, xlab = "Date", ylim = c(-2.2,2.2),
-#      ylab = "Return", col = "black", cex.axis = 1.5, cex.lab = 1.5, pch = 19)
-# lines(1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
-# lines(-1.96*Volatility(fit.mcmc.k1), type = 'l', col = "red")
-# lines(1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
-# lines(-1.96*Volatility(fit.mcmc.k2), type = 'l', col = "blue")
-# lines(1.96*Volatility(fit.mcmc.k3), type = 'l', col = "green")
-# lines(-1.96*Volatility(fit.mcmc.k3), type = 'l', col = "green")
-# lines(1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
-# lines(-1.96*Volatility(fit.mcmc.k4), type = 'l', col = "orange")
-# lines(1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
-# lines(-1.96*Volatility(fit.mcmc.k5), type = 'l', col = "purple")
-# legend(x="topleft", legend=c("K=1", "K=2","K=3","K=4","K=5"),
-#        col=c("red", "blue", "green", "orange","purple"), lty=1, cex=0.8)
-```
 
 
